@@ -1,19 +1,8 @@
 <?php
-// Database credentials
-$servername = "localhost";
-$username = "root"; // Database username
-$password = ""; // Database password
-$dbname = "brms"; // Database name
+// Database connection
+require_once '../admin.conf.php';
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-// Start session if not already started
+// Start session
 session_start();
 
 // Define a variable to hold error message
@@ -21,38 +10,42 @@ $error_message = "";
 
 // Get user input from the login form
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Get and sanitize inputs
     $nic = $_POST['nic'];
-    $user_password = $_POST['password'];
+    $password = $_POST['password'];
 
-    // SQL query to fetch the user data based on NIC
-    $sql = "SELECT * FROM admin WHERE NIC = ?";
+    // Prepared statement to check admin credentials
+    $sql = "SELECT * FROM admin WHERE NIC = ? AND role = 'admin'";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $nic);
     $stmt->execute();
     $result = $stmt->get_result();
 
-    // Check if the NIC exists in the database
     if ($result->num_rows > 0) {
-        // Fetch the user data
         $row = $result->fetch_assoc();
         
-        // Compare the provided password with the password in the database
-        if ($row['password'] === $user_password) {
-            // Password is correct, start a session and redirect to a dashboard or home page
-            $_SESSION['nic'] = $nic;
+        // Verify password using secure hash comparison
+        if (password_verify($password, $row['password'])) {
+            // Set session variables
+            $_SESSION['admin_id'] = $row['id'];
+            $_SESSION['nic'] = $row['nic'];
+            $_SESSION['role'] = $row['role'];
+            
             header("Location: dashboard.php");
             exit();
         } else {
-            // Invalid password
-            $error_message = "Invalid password! Please try again.";
+            $error_message = "Invalid credentials";
+            header("Location: login.php?error=" . urlencode($error_message));
+            exit();
         }
     } else {
-        // NIC not found in the database
-        $error_message = "You are not an admin. Please use the User login!";
+        $error_message = "Invalid credentials";
+        header("Location: login.php?error=" . urlencode($error_message));
+        exit();
     }
 }
 
-// Close the connection
+$stmt->close();
 $conn->close();
 ?>
 
